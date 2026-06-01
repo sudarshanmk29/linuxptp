@@ -261,7 +261,8 @@ struct ptp_sys_offset_precise {
 
 struct ptp_sys_offset_extended {
 	unsigned int n_samples; /* Desired number of measurements. */
-	unsigned int rsv[3];    /* Reserved for future use. */
+	__kernel_clockid_t clockid;
+	unsigned int rsv[2];    /* Reserved for future use. */
 	/*
 	 * Array of [system, phc, system] time stamps. The kernel will provide
 	 * 3*n_samples time stamps.
@@ -481,6 +482,15 @@ enum {
 };
 
 #endif /* HAVE_VCLOCKS */
+
+#ifndef MAX_CLOCKS
+#define MAX_CLOCKS                      16
+#endif
+#ifndef CLOCK_AUX
+#define CLOCK_AUX                       MAX_CLOCKS
+#define MAX_AUX_CLOCKS                  8
+#define CLOCK_AUX_LAST                  (CLOCK_AUX + MAX_AUX_CLOCKS - 1)
+#endif /* CLOCK_AUX */
 
 #ifdef __UCLIBC__
 
