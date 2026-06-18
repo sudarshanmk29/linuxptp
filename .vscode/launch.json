@@ -9,8 +9,10 @@
             "type": "lldb",
             "request": "launch",
             "program": "${workspaceRoot}/ptp4l",
+            "stopOnEntry": false,
             "args": ["-i","veth_ptp_master", "-f", "configs/automotive-master.cfg"],
-            "cwd": "${workspaceRoot}"
+            "cwd": "${workspaceRoot}",
+            "preLaunchTask": "Make Build"
         },
     ]
 }
