@@ -8,8 +8,6 @@
 set -e
 
 PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-MASTER_CFG="$PROJECT_DIR/debug_master.cfg"
-SLAVE_CFG="$PROJECT_DIR/debug_slave.cfg"
 
 # Virtual interface names
 VETH_MASTER="veth_ptp_master"
@@ -140,15 +138,15 @@ create_veth() {
     ip link set "$VETH_MASTER" up
     ip link set "$VETH_SLAVE" up
     
-    ip addr show "$VETH_MASTER"
-    ip addr show "$VETH_SLAVE"
+    #ip addr show "$VETH_MASTER"
+    #ip addr show "$VETH_SLAVE"
 
     log_success "Virtual ethernet pair created: $VETH_MASTER <-> $VETH_SLAVE"
 }
 
 # Configure virtual interfaces for software timestamping
-configure_timestamping() {
-    log_info "Configuring software timestamping on virtual interfaces..."
+check_timestamping_capabilities() {
+    log_info "Check if software timestamping is available on virtual interfaces..."
     
     # Enable software timestamping
     for iface in "$VETH_MASTER" "$VETH_SLAVE"; do
@@ -161,7 +159,7 @@ configure_timestamping() {
         fi
     done
     
-    log_success "Software timestamping configured"
+    #log_success "Software timestamping configured"
 }
 
 # Create PID files directory
@@ -172,79 +170,6 @@ create_pid_dir() {
     echo "$pid_dir"
 }
 
-# Start PTP master
-start_master() {
-    local pid_dir="$1"
-    
-    log_info "Starting PTP master on interface $VETH_MASTER..."
-    
-    # Ensure config exists
-    if [[ ! -f "$MASTER_CFG" ]]; then
-        log_error "Master config not found: $MASTER_CFG"
-        exit 1
-    fi
-    
-    # Start ptp4l in master mode
-    "$PROJECT_DIR/ptp4l" \
-        -i "$VETH_MASTER" \
-        -f "$MASTER_CFG" \
-        -m \
-        > "/tmp/ptp_debug/master.log" 2>&1 &
-    
-    local master_pid=$!
-    echo "$master_pid" > "$pid_dir/master.pid"
-    
-    log_success "PTP master started (PID: $master_pid)"
-    sleep 1
-}
-
-# Start PTP slave
-start_slave() {
-    local pid_dir="$1"
-    
-    log_info "Starting PTP slave on interface $VETH_SLAVE..."
-    
-    # Ensure config exists
-    if [[ ! -f "$SLAVE_CFG" ]]; then
-        log_error "Slave config not found: $SLAVE_CFG"
-        exit 1
-    fi
-    
-    # Start ptp4l in slave mode
-    "$PROJECT_DIR/ptp4l" \
-        -i "$VETH_SLAVE" \
-        -f "$SLAVE_CFG" \
-        > "/tmp/ptp_debug/slave.log" 2>&1 &
-    
-    local slave_pid=$!
-    echo "$slave_pid" > "$pid_dir/slave.pid"
-    
-    log_success "PTP slave started (PID: $slave_pid)"
-    sleep 1
-}
-
-# Wait for synchronization
-wait_sync() {
-    log_info "Waiting for PTP synchronization..."
-    
-    local timeout=30000
-    local elapsed=0
-    
-    while [[ $elapsed -lt $timeout ]]; do
-        # Check if slave has synchronized
-        if grep -q "MASTER" "/tmp/ptp_debug/slave.log" 2>/dev/null; then
-            log_success "PTP slave synchronized with master!"
-            return 0
-        fi
-        
-        sleep 1
-        ((elapsed++))
-        echo -ne "${BLUE}[INFO]${NC} Waiting... ${elapsed}s\r"
-    done
-    
-    log_warn "Timeout waiting for synchronization (this is normal, sync may take longer)"
-    echo ""
-}
 
 # Display interface status
 show_interface_status() {
@@ -253,19 +178,6 @@ show_interface_status() {
     ip addr show "$VETH_MASTER"
     echo ""
     ip addr show "$VETH_SLAVE"
-    echo ""
-}
-
-# Display debugging information
-show_debug_info() {
-    log_info "PTP Debug Information:"
-    echo ""
-    echo -e "${BLUE}Master PID:${NC} $(cat /tmp/ptp_debug/master.pid 2>/dev/null || echo 'N/A')"
-    echo -e "${BLUE}Slave PID:${NC} $(cat /tmp/ptp_debug/slave.pid 2>/dev/null || echo 'N/A')"
-    echo ""
-    echo -e "${BLUE}Log files:${NC}"
-    echo "  Master: /tmp/ptp_debug/master.log"
-    echo "  Slave:  /tmp/ptp_debug/slave.log"
     echo ""
 }
 
@@ -279,30 +191,10 @@ main() {
     
     check_root
     check_prerequisites
-    compile_project
     cleanup_veth
     create_veth
-    configure_timestamping
-    
-    local pid_dir=$(create_pid_dir)
-    
-    start_master "$pid_dir"
-    start_slave "$pid_dir"
-    
-    wait_sync
-    
     show_interface_status
-    show_debug_info
-    
-    echo ""
-    log_success "Setup complete! PTP master and slave are running."
-    echo ""
-    echo -e "${YELLOW}Quick commands:${NC}"
-    echo "  View master logs:  tail -f /tmp/ptp_debug/master.log"
-    echo "  View slave logs:   tail -f /tmp/ptp_debug/slave.log"
-    echo "  View both logs:    tail -f /tmp/ptp_debug/*.log"
-    echo "  Stop processes:    $PROJECT_DIR/stop_debug.sh"
-    echo ""
+    check_timestamping_capabilities
 }
 
 # Run main function
