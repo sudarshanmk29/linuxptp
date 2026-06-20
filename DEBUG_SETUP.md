@@ -7,8 +7,8 @@ This guide helps you set up a debugging environment for LinuxPTP using software 
 The setup creates:
 
 - **Virtual Ethernet Pair**: `veth_ptp_master` ↔ `veth_ptp_slave`
-- **PTP Master Process**: Running on `veth_ptp_master` interface
-- **PTP Slave Process**: Running on `veth_ptp_slave` interface
+- **PTP Master Process**: Running on `/var/run/ptp/ptp4l_master` interface
+- **PTP Slave Process**: Running on `/var/run/ptp/ptp4l_slave` interface
 - **Software Timestamping**: Using the `SO_TIMESTAMPING` socket option
 
 ## Prerequisites
@@ -41,41 +41,29 @@ sudo bash setup_debug_veth.sh
 
 This script will:
 
-- ✓ Compile the linuxptp project
 - ✓ Clean up any existing virtual interfaces
 - ✓ Create virtual ethernet pair
 - ✓ Configure software timestamping
-- ✓ Start PTP master process
-- ✓ Start PTP slave process
-- ✓ Wait for synchronization
-
-### 2. Monitor the Processes
 
 ```bash
-# View both logs
-bash view_debug.sh
+#Compile the project in Release Configuration
+make clean && make
 
-# Or view specific logs
-bash view_debug.sh master
-bash view_debug.sh slave
-
-# Or tail manually
-tail -f /tmp/ptp_debug/master.log
-tail -f /tmp/ptp_debug/slave.log
+#Compile the project in Debug Configuration
+make clean && make DEBUG="-g -O0"
 ```
-
-### 3. Stop the Debug Session
 
 ```bash
-# Stop processes and clean up
-sudo bash stop_debug.sh
-```
+#Start master process
+sudo ./ptp4l -i veth_ptp_master -f configs/automotive-master.cfg -m
 
-Logs will be archived with timestamp in `debug_logs_YYYYMMDD_HHMMSS/` directory.
+#Start Slave process
+sudo ./ptp4l -i veth_ptp_slave -f configs/automotive-slave.cfg -m -s
+```
 
 ## Configuration Details
 
-### Master Configuration (`debug_master.cfg`)
+### Master Configuration (`automotive-master.cfg`)
 
 Key settings:
 
@@ -83,17 +71,17 @@ Key settings:
 - `network_transport = UDPv4` - Use UDP for easier software timestamping
 - `delay_mechanism = E2E` - End-to-end delay mechanism
 - `serverOnly = 1` - Act as master
-- `logging_level = 6` - Maximum verbosity for debugging
+- `logging_level = 7` - Maximum verbosity for debugging
 - `logSyncInterval = -3` - Sync interval (1 message per 8 seconds)
 
-### Slave Configuration (`debug_slave.cfg`)
+### Slave Configuration (`automotive-slave.cfg`)
 
 Key settings:
 
 - `time_stamping = software` - Enable software timestamping
 - `network_transport = UDPv4` - Use UDP for easier software timestamping
 - `clientOnly = 1` - Act as slave/client
-- `logging_level = 6` - Maximum verbosity for debugging
+- `logging_level = 7` - Maximum verbosity for debugging
 - Enhanced servo settings for faster convergence
 
 ## Virtual Interface Details
@@ -177,10 +165,6 @@ sudo bash setup_debug_veth.sh
 **Check**:
 
 ```bash
-# View logs for errors
-tail /tmp/ptp_debug/master.log
-tail /tmp/ptp_debug/slave.log
-
 # Verify interfaces exist
 ip link show | grep veth
 
@@ -192,7 +176,7 @@ ps aux | grep ptp4l
 
 - Port 319/320 already in use (kill existing ptp4l processes)
 - Interface not properly created (check `ip addr show`)
-- Configuration file issues (validate `debug_master.cfg` and `debug_slave.cfg`)
+- Configuration file issues (validate `automotive-master.cfg` and `automotive-slave.cfg`)
 
 ### Issue: Compilation fails
 
@@ -215,7 +199,7 @@ make -j$(nproc)
 
 ### To use Raw Ethernet (Layer 2) instead of UDP
 
-Edit `debug_master.cfg` and `debug_slave.cfg`:
+Edit `automotive-master.cfg` and `automotive-slave.cfg`:
 
 ```cfg
 # Change from:
@@ -254,15 +238,9 @@ time_stamping  hardware_or_software
 
 | File | Purpose |
 |------|---------|
-| `debug_master.cfg` | Master node configuration |
-| `debug_slave.cfg` | Slave node configuration |
-| `setup_debug_veth.sh` | Main setup script |
-| `stop_debug.sh` | Cleanup and stop script |
-| `view_debug.sh` | Log viewer script |
-| `/tmp/ptp_debug/master.log` | Master process log |
-| `/tmp/ptp_debug/slave.log` | Slave process log |
-| `/tmp/ptp_debug/master.pid` | Master process ID |
-| `/tmp/ptp_debug/slave.pid` | Slave process ID |
+| `configs/automotive-master.cfg` | Master node configuration |
+| `configs/automotive-slave.cfg` | Slave node configuration |
+| `setup_debug_veth.sh` | Virtual Ethernet Setup Script |
 
 ## Architecture
 
@@ -287,20 +265,13 @@ Host System
 ### 1. Debug PTP Message Flow
 
 ```bash
-# In separate terminals:
-# Terminal 1: View master log
-tail -f /tmp/ptp_debug/master.log
-
-# Terminal 2: View slave log
-tail -f /tmp/ptp_debug/slave.log
-
 # Terminal 3: Monitor network traffic
 sudo tcpdump -i veth_ptp_master -n 'udp port 319 or udp port 320'
 ```
 
 ### 2. Modify Configuration
 
-Edit `debug_master.cfg` and `debug_slave.cfg` for:
+Edit `automotive-master.cfg` and `automotive-slave.cfg` for:
 
 - Different sync intervals
 - Different delay mechanisms
