@@ -1,0 +1,29 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Clean",
+            "type": "shell",
+            "command": "make clean",
+            "problemMatcher": []
+        },
+        {
+            "label": "Build",
+            "type": "shell",
+            "command": "make",
+            "args": [
+                "DEBUG=-g -O0"
+            ],
+            "problemMatcher": []
+        },
+        {
+            "label": "Make Build",
+            "dependsOrder": "sequence",
+            "dependsOn": [
+                "Clean",
+                "Build"
+            ],
+            "problemMatcher": []
+        }
+    ]
+}
